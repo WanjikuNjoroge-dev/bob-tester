@@ -1,0 +1,30 @@
+
+> bob-tester@0.1.0 dev
+> next dev --port 3000
+
+▲ Next.js 16.2.6 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.203.40:3000
+✓ Ready in 1131ms
+Creating turbopack project {
+  dir: 'C:\\Users\\MissyW\\Documents\\BOB TESTS\\bob-tester',
+  testMode: true
+}
+
+○ Compiling /login ...
+ GET /login 200 in 7.4s (next.js: 5.0s, application-code: 2.5s)
+ GET /login 200 in 225ms (next.js: 17ms, application-code: 208ms)
+ GET /login 200 in 204ms (next.js: 18ms, application-code: 187ms)
+✓ Compiled in 64ms
+ GET /login 200 in 206ms (next.js: 122ms, application-code: 84ms)
+✓ Compiled in 197ms
+✓ Compiled in 78ms
+ GET /login 200 in 955ms (next.js: 244ms, application-code: 711ms)
+ GET /login 200 in 574ms (next.js: 9ms, application-code: 564ms)
+ GET /login 200 in 392ms (next.js: 23ms, application-code: 369ms)
+ GET /login 200 in 389ms (next.js: 122ms, application-code: 267ms)
+ GET /login 200 in 389ms (next.js: 215ms, application-code: 174ms)
+✓ Compiled in 116ms
+ GET /login 200 in 457ms (next.js: 234ms, application-code: 223ms)
+✓ Compiled in 76ms
+ GET /login 200 in 361ms (next.js: 202ms, application-code: 159ms)

@@ -1,26 +1,66 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #040907;
+  --panel: rgba(5, 11, 9, 0.88);
+  --line-soft: rgba(89, 175, 122, 0.18);
+  --line-strong: rgba(95, 255, 156, 0.34);
+  --accent: #71ffad;
+  --accent-strong: #9affc3;
+  --text-primary: #edfff4;
+  --text-secondary: #9ac9ad;
+  --text-muted: #5e8a70;
+  --error: #ff7272;
+  --shadow-terminal: 0 0 30px rgba(27, 255, 128, 0.08);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-background: var(--bg);
+  --color-foreground: var(--text-primary);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--bg);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background:
+    radial-gradient(circle at top, rgba(62, 255, 149, 0.11), transparent 34%),
+    linear-gradient(180deg, #040907 0%, #020403 100%);
+  color: var(--text-primary);
+  font-family: Consolas, "Lucida Console", "SFMono-Regular", Monaco, monospace;
+}
+
+a,
+button,
+input {
+  transition:
+    color 160ms ease,
+    background-color 160ms ease,
+    border-color 160ms ease,
+    opacity 160ms ease;
+}
+
+::selection {
+  background: rgba(113, 255, 173, 0.28);
+  color: var(--text-primary);
+}
+
+.scanlines {
+  background:
+    linear-gradient(
+      to bottom,
+      transparent 0%,
+      rgba(255, 255, 255, 0.02) 50%,
+      transparent 100%
+    );
+  background-size: 100% 4px;
+}
+
+.terminal-glow {
+  box-shadow: var(--shadow-terminal);
 }
