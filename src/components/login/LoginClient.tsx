@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Script from "next/script";
 import {
   Fingerprint,
   KeyRound,
@@ -23,6 +24,7 @@ function Spinner() {
 
 export function LoginClient() {
   const router = useRouter();
+  const recaptchaSiteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY ?? "";
   const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
@@ -64,6 +66,21 @@ export function LoginClient() {
     setCodeExpired(false);
   }
 
+  async function getRecaptchaToken(action: "otp_send" | "otp_verify") {
+    if (!recaptchaSiteKey || !window.grecaptcha) {
+      throw new Error("Security check unavailable.");
+    }
+
+    return new Promise<string>((resolve, reject) => {
+      window.grecaptcha?.ready(() => {
+        window.grecaptcha
+          ?.execute(recaptchaSiteKey, { action })
+          .then(resolve)
+          .catch(reject);
+      });
+    });
+  }
+
   async function handleSendOtp(event?: React.FormEvent) {
     event?.preventDefault();
     setError("");
@@ -72,10 +89,11 @@ export function LoginClient() {
     setCodeExpired(false);
 
     try {
+      const recaptchaToken = await getRecaptchaToken("otp_send");
       const res = await fetch("/api/auth/otp/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, recaptchaToken }),
       });
       const data = await res.json();
 
@@ -109,10 +127,11 @@ export function LoginClient() {
     setLoading(true);
 
     try {
+      const recaptchaToken = await getRecaptchaToken("otp_verify");
       const res = await fetch("/api/auth/otp/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, code, otpAttemptToken }),
+        body: JSON.stringify({ email, code, otpAttemptToken, recaptchaToken }),
       });
       const data = await res.json();
 
@@ -164,7 +183,7 @@ export function LoginClient() {
       const verifyRes = await fetch("/api/auth/webauthn/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, response: assertion }),
+        body: JSON.stringify({ email, otpToken, response: assertion }),
       });
       const verifyData = await verifyRes.json();
 
@@ -238,6 +257,13 @@ export function LoginClient() {
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[var(--bg)] text-[var(--text-primary)]">
+      {recaptchaSiteKey ? (
+        <Script
+          id="recaptcha-v3"
+          src={`https://www.google.com/recaptcha/api.js?render=${recaptchaSiteKey}`}
+          strategy="afterInteractive"
+        />
+      ) : null}
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(113,255,173,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(113,255,173,0.06)_1px,transparent_1px)] bg-[size:2.6rem_2.6rem] opacity-50" />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(48,255,128,0.13),transparent_45%),linear-gradient(180deg,rgba(3,10,8,0.24),rgba(3,10,8,0.88))]" />
       <div className="scanlines pointer-events-none absolute inset-0 opacity-30" />

@@ -1,8 +1,11 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { isAuthorizedEmail } from "@/lib/auth";
 import { connectToDatabase } from "@/lib/db";
+import { isDisposableEmail } from "@/lib/email-policy";
 import { verifyOtpAttemptToken } from "@/lib/jwt-server";
 import { hashOtpCode, hashOtpRateLimitKey, signOtpToken } from "@/lib/otp-server";
+import { mergeRecaptchaBindings, verifyRecaptchaToken } from "@/lib/recaptcha";
 import { getWebAuthnConfig } from "@/lib/webauthn-config";
 import { BobAdmin } from "@/models/BobAdmin";
 import { OtpChallenge } from "@/models/OtpChallenge";
@@ -40,7 +43,7 @@ async function getAttemptLimiter(args: {
         cooldownUntil: null,
       },
     },
-    { upsert: true, new: true }
+    { upsert: true, returnDocument: "after" }
   );
 
   if (!limiter) {
@@ -120,6 +123,7 @@ export async function POST(req: NextRequest) {
     email?: string;
     code?: string;
     otpAttemptToken?: string;
+    recaptchaToken?: string;
   };
 
   const { email: rawEmail, code, otpAttemptToken } = body;
@@ -140,6 +144,10 @@ export async function POST(req: NextRequest) {
   }
 
   const email = rawEmail.trim().toLowerCase();
+  if (isDisposableEmail(email)) {
+    return NextResponse.json({ error: "Email not allowed" }, { status: 400 });
+  }
+
   const attempt = await verifyOtpAttemptToken(otpAttemptToken, email);
   if (!attempt) {
     return NextResponse.json(
@@ -155,6 +163,15 @@ export async function POST(req: NextRequest) {
   const ipHash = hashOtpRateLimitKey(`ip:${ip}`);
 
   try {
+    const recaptcha = await verifyRecaptchaToken({
+      req,
+      token: body.recaptchaToken,
+      action: "otp_verify",
+    });
+    if (!recaptcha.ok) {
+      return NextResponse.json({ error: recaptcha.error }, { status: recaptcha.status });
+    }
+
     await connectToDatabase();
 
     const existingLimiter = await getAttemptLimiter({
@@ -231,9 +248,22 @@ export async function POST(req: NextRequest) {
       ipHash,
     });
 
-    const otpToken = await signOtpToken(email);
+    const authorized = await isAuthorizedEmail(email);
     await OtpChallenge.deleteOne({ _id: challenge._id });
     await clearAttemptLimiter({ jti: attempt.jti, ipHash });
+
+    if (!authorized) {
+      return NextResponse.json(
+        { error: "Access denied" },
+        { status: 403 }
+      );
+    }
+
+    const recaptchaBinding = mergeRecaptchaBindings([
+      attempt.recaptchaBinding,
+      recaptcha.binding,
+    ]);
+    const otpToken = await signOtpToken(email, recaptchaBinding);
 
     const { rpId } = getWebAuthnConfig(req);
     const doc = await BobAdmin.findOne(

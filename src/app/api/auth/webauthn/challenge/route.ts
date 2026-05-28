@@ -1,5 +1,6 @@
 import { generateAuthenticationOptions } from "@simplewebauthn/server";
 import { NextRequest, NextResponse } from "next/server";
+import { isAuthorizedEmail } from "@/lib/auth";
 import { connectToDatabase } from "@/lib/db";
 import { verifyOtpToken } from "@/lib/jwt-server";
 import { getWebAuthnConfig } from "@/lib/webauthn-config";
@@ -25,8 +26,8 @@ export async function POST(req: NextRequest) {
   }
 
   const email = rawEmail.trim().toLowerCase();
-  const valid = await verifyOtpToken(otpToken, email);
-  if (!valid) {
+  const verifiedOtp = await verifyOtpToken(otpToken, email);
+  if (!verifiedOtp) {
     return NextResponse.json({ error: "Invalid or expired OTP token" }, { status: 401 });
   }
 
@@ -34,6 +35,10 @@ export async function POST(req: NextRequest) {
 
   try {
     await connectToDatabase();
+
+    if (!(await isAuthorizedEmail(email))) {
+      return NextResponse.json({ error: "Access denied" }, { status: 403 });
+    }
 
     const doc = await BobAdmin.findOne({}, { passkeys: 1 }).lean();
     const adminPasskeys = (doc?.passkeys ?? []).filter(

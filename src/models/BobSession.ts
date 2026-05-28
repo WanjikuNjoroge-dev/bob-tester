@@ -6,6 +6,7 @@ export interface IBobSession extends Document {
   sessionId: string;
   email: string;
   role: AdminRole;
+  recaptchaBinding: string;
   createdAt: Date;
   expiresAt: Date;
 }
@@ -15,6 +16,7 @@ const BobSessionSchema = new Schema<IBobSession>(
     sessionId: { type: String, required: true, unique: true },
     email: { type: String, required: true, lowercase: true, trim: true },
     role: { type: String, required: true, enum: ["admin", "super_admin"] },
+    recaptchaBinding: { type: String, required: true },
     createdAt: { type: Date, default: () => new Date() },
     expiresAt: { type: Date, required: true },
   },

@@ -28,3 +28,5 @@ Creating turbopack project {
  GET /login 200 in 457ms (next.js: 234ms, application-code: 223ms)
 ✓ Compiled in 76ms
  GET /login 200 in 361ms (next.js: 202ms, application-code: 159ms)
+ POST /api/auth/otp/send 500 in 1357ms (next.js: 891ms, application-code: 466ms)
+ GET /login 200 in 148ms (next.js: 73ms, application-code: 75ms)

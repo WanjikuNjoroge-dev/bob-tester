@@ -31,9 +31,9 @@ export function hashOtpRateLimitKey(value: string) {
   return createHmac("sha256", getOtpHmacKey()).update(value).digest("hex");
 }
 
-export async function signOtpAttemptToken(email: string) {
+export async function signOtpAttemptToken(email: string, recaptchaBinding: string) {
   const privateKey = await importPKCS8(getPrivateKeyPem(), ALG);
-  return new SignJWT({ purpose: "otp-attempt", email })
+  return new SignJWT({ purpose: "otp-attempt", email, rb: recaptchaBinding })
     .setProtectedHeader({ alg: ALG, kid: "1" })
     .setSubject(email)
     .setJti(randomUUID())
@@ -44,9 +44,9 @@ export async function signOtpAttemptToken(email: string) {
     .sign(privateKey);
 }
 
-export async function signOtpToken(email: string) {
+export async function signOtpToken(email: string, recaptchaBinding: string) {
   const privateKey = await importPKCS8(getPrivateKeyPem(), ALG);
-  return new SignJWT({ purpose: "otp-verified", email })
+  return new SignJWT({ purpose: "otp-verified", email, rb: recaptchaBinding })
     .setProtectedHeader({ alg: ALG, kid: "1" })
     .setSubject(email)
     .setIssuedAt()

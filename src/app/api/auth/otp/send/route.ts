@@ -1,9 +1,10 @@
 import { randomInt } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/db";
+import { isDisposableEmail } from "@/lib/email-policy";
 import { hashOtpCode, hashOtpRateLimitKey, signOtpAttemptToken } from "@/lib/otp-server";
+import { verifyRecaptchaToken } from "@/lib/recaptcha";
 import { getResendClient, getResendFromEmail } from "@/lib/resend";
-import { BobAdmin } from "@/models/BobAdmin";
 import { OtpChallenge } from "@/models/OtpChallenge";
 import { OtpRateLimit } from "@/models/OtpRateLimit";
 
@@ -14,18 +15,6 @@ const COOLDOWN_MS = 30 * 60 * 1000;
 
 function generateCode() {
   return String(randomInt(100000, 1000000)).padStart(6, "0");
-}
-
-async function isAuthorizedEmail(email: string) {
-  const superAdminEmail = (process.env.SUPER_ADMIN_EMAIL ?? "")
-    .trim()
-    .toLowerCase();
-  if (email === superAdminEmail) {
-    return true;
-  }
-
-  const doc = await BobAdmin.findOne({ emails: email }, { _id: 1 }).lean();
-  return !!doc;
 }
 
 function formatRetryAfter(seconds: number) {
@@ -100,7 +89,7 @@ async function loadEmailSendLimiter(emailHash: string, now: Date) {
         cooldownUntil: null,
       },
     },
-    { upsert: true, new: true }
+    { upsert: true, returnDocument: "after" }
   );
 
   if (!limiter) {
@@ -111,7 +100,10 @@ async function loadEmailSendLimiter(emailHash: string, now: Date) {
 }
 
 export async function POST(req: NextRequest) {
-  const body = (await req.json().catch(() => ({}))) as { email?: string };
+  const body = (await req.json().catch(() => ({}))) as {
+    email?: string;
+    recaptchaToken?: string;
+  };
   const rawEmail = body.email;
 
   if (!rawEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail.trim())) {
@@ -120,8 +112,21 @@ export async function POST(req: NextRequest) {
 
   const email = rawEmail.trim().toLowerCase();
 
+  if (isDisposableEmail(email)) {
+    return NextResponse.json({ error: "Email not allowed" }, { status: 400 });
+  }
+
   try {
-    const otpAttemptToken = await signOtpAttemptToken(email);
+    const recaptcha = await verifyRecaptchaToken({
+      req,
+      token: body.recaptchaToken,
+      action: "otp_send",
+    });
+    if (!recaptcha.ok) {
+      return NextResponse.json({ error: recaptcha.error }, { status: recaptcha.status });
+    }
+
+    const otpAttemptToken = await signOtpAttemptToken(email, recaptcha.binding);
     await connectToDatabase();
 
     const now = new Date();
@@ -187,10 +192,6 @@ export async function POST(req: NextRequest) {
       resendAvailableAt: new Date(now.getTime() + RESEND_GAP_MS),
     });
 
-    if (!(await isAuthorizedEmail(email))) {
-      return NextResponse.json(payload);
-    }
-
     const code = generateCode();
     const codeHash = hashOtpCode(code);
 
@@ -201,19 +202,40 @@ export async function POST(req: NextRequest) {
     );
 
     const resend = getResendClient();
-    await resend.emails.send({
-      from: `Bob Tester <${getResendFromEmail()}>`,
-      to: [email],
-      subject: "Bob Tester verification code",
-      text: [
-        "Your Bob Tester verification code is:",
-        code,
-        "",
-        "This code expires in 10 minutes.",
-        "",
-        "If you did not request this code, you can ignore this message.",
-      ].join("\n"),
-    });
+    const { data, error } = await resend.emails.send(
+      {
+        from: `Bob Tester <${getResendFromEmail()}>`,
+        to: [email],
+        subject: "Bob Tester verification code",
+        text: [
+          "Your Bob Tester verification code is:",
+          code,
+          "",
+          "This code expires in 10 minutes.",
+          "",
+          "If you did not request this code, you can ignore this message.",
+        ].join("\n"),
+      },
+      {
+        idempotencyKey: `otp-send/${emailHash}/${now.getTime()}`,
+      }
+    );
+
+    if (error) {
+      console.error("POST /api/auth/otp/send resend error", error);
+      return NextResponse.json(
+        { error: "Unable to send code right now." },
+        { status: 502 }
+      );
+    }
+
+    if (!data?.id) {
+      console.error("POST /api/auth/otp/send missing resend id");
+      return NextResponse.json(
+        { error: "Unable to send code right now." },
+        { status: 502 }
+      );
+    }
 
     return NextResponse.json(payload);
   } catch (error) {

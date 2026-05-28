@@ -1,0 +1,11 @@
+POST /api/auth/otp/send Error: JWT_PRIVATE_KEY is not set.
+    at getPrivateKeyPem (src\lib\otp-server.ts:18:11)
+    at signOtpAttemptToken (src\lib\otp-server.ts:35:40)
+    at POST (src\app\api\auth\otp\send\route.ts:124:54)
+  16 |   const raw = process.env.JWT_PRIVATE_KEY ?? "";
+  17 |   if (!raw) {
+> 18 |     throw new Error("JWT_PRIVATE_KEY is not set.");
+     |           ^
+  19 |   }
+  20 |   if (raw.startsWith("-----BEGIN")) {
+  21 |     return raw.replace(/\\n/g, "\n");

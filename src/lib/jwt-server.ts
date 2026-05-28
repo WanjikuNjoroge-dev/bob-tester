@@ -28,14 +28,23 @@ export async function verifyOtpToken(token: string, expectedEmail: string) {
       purpose?: string;
       email?: string;
       sub?: string;
+      rb?: string;
     };
 
-    return (
-      parsed.purpose === "otp-verified" &&
-      (parsed.email === expectedEmail || parsed.sub === expectedEmail)
-    );
+    if (
+      parsed.purpose !== "otp-verified" ||
+      (parsed.email !== expectedEmail && parsed.sub !== expectedEmail) ||
+      typeof parsed.rb !== "string"
+    ) {
+      return null;
+    }
+
+    return {
+      email: parsed.email ?? parsed.sub ?? expectedEmail,
+      recaptchaBinding: parsed.rb,
+    };
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -55,13 +64,15 @@ export async function verifyOtpAttemptToken(
       email?: string;
       sub?: string;
       jti?: string;
+      rb?: string;
     };
     const email = parsed.email ?? parsed.sub;
 
     if (
       parsed.purpose !== "otp-attempt" ||
       email !== expectedEmail ||
-      !parsed.jti
+      !parsed.jti ||
+      typeof parsed.rb !== "string"
     ) {
       return null;
     }
@@ -69,6 +80,7 @@ export async function verifyOtpAttemptToken(
     return {
       email,
       jti: parsed.jti,
+      recaptchaBinding: parsed.rb,
     };
   } catch {
     return null;

@@ -64,3 +64,7 @@ input {
 .terminal-glow {
   box-shadow: var(--shadow-terminal);
 }
+
+.grecaptcha-badge {
+  visibility: hidden;
+}

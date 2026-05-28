@@ -57,9 +57,15 @@ async function sign(payload: string) {
   return base64urlEncode(new Uint8Array(signature));
 }
 
-async function buildCookieValue(email: string, sessionId: string) {
+async function buildCookieValue(
+  email: string,
+  sessionId: string,
+  recaptchaBinding: string
+) {
   const payload = base64urlEncode(
-    new TextEncoder().encode(JSON.stringify({ e: email, s: sessionId }))
+    new TextEncoder().encode(
+      JSON.stringify({ e: email, s: sessionId, r: recaptchaBinding })
+    )
   );
   const signature = await sign(payload);
   return `${payload}.${signature}`;
@@ -68,9 +74,10 @@ async function buildCookieValue(email: string, sessionId: string) {
 export async function serializeSessionCookie(
   email: string,
   sessionId: string,
+  recaptchaBinding: string,
   maxAgeSeconds = SESSION_MAX_AGE
 ) {
-  const value = await buildCookieValue(email, sessionId);
+  const value = await buildCookieValue(email, sessionId, recaptchaBinding);
   const isProduction = process.env.NODE_ENV === "production";
   const parts = [
     `${COOKIE_NAME}=${value}`,
@@ -127,15 +134,20 @@ export async function verifySessionCookie(cookieHeader: string | null | undefine
 
     const parsed = JSON.parse(
       new TextDecoder().decode(base64urlDecode(payload))
-    ) as { e?: string; s?: string };
+    ) as { e?: string; s?: string; r?: string };
 
-    if (typeof parsed.e !== "string" || typeof parsed.s !== "string") {
+    if (
+      typeof parsed.e !== "string" ||
+      typeof parsed.s !== "string" ||
+      typeof parsed.r !== "string"
+    ) {
       return null;
     }
 
     return {
       email: parsed.e,
       sessionId: parsed.s,
+      recaptchaBinding: parsed.r,
     };
   } catch {
     return null;

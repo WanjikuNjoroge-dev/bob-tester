@@ -3,6 +3,7 @@ import type { AuthenticationResponseJSON } from "@simplewebauthn/server";
 import { NextRequest, NextResponse } from "next/server";
 import { resolveRole } from "@/lib/auth";
 import { connectToDatabase } from "@/lib/db";
+import { verifyOtpToken } from "@/lib/jwt-server";
 import { serializeSessionCookie } from "@/lib/session-cookie";
 import { getWebAuthnConfig } from "@/lib/webauthn-config";
 import { BobAdmin } from "@/models/BobAdmin";
@@ -14,10 +15,11 @@ const SESSION_MAX_AGE_SECS = 8 * 60 * 60;
 export async function POST(req: NextRequest) {
   const body = (await req.json().catch(() => ({}))) as {
     email?: string;
+    otpToken?: string;
     response?: AuthenticationResponseJSON;
   };
 
-  const { email: rawEmail, response } = body;
+  const { email: rawEmail, otpToken, response } = body;
 
   if (!rawEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail.trim())) {
     return NextResponse.json({ error: "Valid email required" }, { status: 400 });
@@ -27,7 +29,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "response required" }, { status: 400 });
   }
 
+  if (!otpToken) {
+    return NextResponse.json({ error: "otpToken required" }, { status: 401 });
+  }
+
   const email = rawEmail.trim().toLowerCase();
+  const verifiedOtp = await verifyOtpToken(otpToken, email);
+  if (!verifiedOtp) {
+    return NextResponse.json({ error: "Invalid or expired OTP token" }, { status: 401 });
+  }
+
   const { rpId, rpOrigin } = getWebAuthnConfig(req);
 
   try {
@@ -98,12 +109,23 @@ export async function POST(req: NextRequest) {
     const role = resolveRole(email);
     const expiresAt = new Date(Date.now() + SESSION_MAX_AGE_SECS * 1000);
 
-    await BobSession.create({ sessionId, email, role, expiresAt });
+    await BobSession.create({
+      sessionId,
+      email,
+      role,
+      recaptchaBinding: verifiedOtp.recaptchaBinding,
+      expiresAt,
+    });
 
     const res = NextResponse.json({ ok: true });
     res.headers.set(
       "Set-Cookie",
-      await serializeSessionCookie(email, sessionId, SESSION_MAX_AGE_SECS)
+      await serializeSessionCookie(
+        email,
+        sessionId,
+        verifiedOtp.recaptchaBinding,
+        SESSION_MAX_AGE_SECS
+      )
     );
     return res;
   } catch (error) {
